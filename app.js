@@ -256,13 +256,19 @@ async function loadPartners(){
     return `${mine.length} jobs total · ${today_count} today · ${delivered.length} delivered`;
   }
 
-  $("cookPartners").innerHTML=c.data?.length?c.data.map(x=>`<div class="partner-row"><span>👨‍🍳</span><div><b>${esc(x.name)}</b><small>${esc(x.type||"Cook")} · ${x.active?"Active":"Inactive"}</small><small>${cookStats(x.id)}</small></div><button class="pause" onclick="togglePartner('merchants','${x.id}',${!x.active})">${x.active?"Disable":"Enable"}</button></div>`).join(""):"<div class='empty-state'>No approved cooks.</div>";
-  $("riderPartners").innerHTML=r.data?.length?r.data.map(x=>`<div class="partner-row"><span>🛵</span><div><b>${esc(x.name)}</b><small>${esc(x.vehicle_type||"Rider")} · ${esc(x.operating_area||"--")}</small><small>${riderStats(x.id)}</small></div><button class="pause" onclick="togglePartner('riders','${x.id}',${!x.active})">${x.active?"Disable":"Enable"}</button></div>`).join(""):"<div class='empty-state'>No approved riders.</div>";
+  $("cookPartners").innerHTML=c.data?.length?c.data.map(x=>`<div class="partner-row"><span>👨‍🍳</span><div><b>${esc(x.name)}</b><small>${esc(x.type||"Cook")} · ${x.active?"Active":"Inactive"}</small><small>${cookStats(x.id)}</small></div><div class="partner-actions"><button class="pause" onclick="togglePartner('merchants','${x.id}',${!x.active})">${x.active?"Disable":"Enable"}</button><button class="danger" onclick="deletePartner('merchants','${x.id}','${esc(x.name)}')">Delete</button></div></div>`).join(""):"<div class='empty-state'>No approved cooks.</div>";
+  $("riderPartners").innerHTML=r.data?.length?r.data.map(x=>`<div class="partner-row"><span>🛵</span><div><b>${esc(x.name)}</b><small>${esc(x.vehicle_type||"Rider")} · ${esc(x.operating_area||"--")}</small><small>${riderStats(x.id)}</small></div><div class="partner-actions"><button class="pause" onclick="togglePartner('riders','${x.id}',${!x.active})">${x.active?"Disable":"Enable"}</button><button class="danger" onclick="deletePartner('riders','${x.id}','${esc(x.name)}')">Delete</button></div></div>`).join(""):"<div class='empty-state'>No approved riders.</div>";
 }
 async function togglePartner(table,id,active){
   const {error}=await supabase.from(table).update({active}).eq("id",id);
   if(error)return toast(error.message);
   await refreshAll();toast(active?"Partner enabled":"Partner disabled");
+}
+async function deletePartner(table,id,name){
+  if(!confirm("Permanently delete "+(name||"this partner")+"? This cannot be undone."))return;
+  const {error}=await supabase.from(table).delete().eq("id",id);
+  if(error)return toast(error.message);
+  await refreshAll();toast("Partner deleted");
 }
 function subscribe(){
   if(adminChannel)supabase.removeChannel(adminChannel);
