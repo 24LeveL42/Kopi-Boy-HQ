@@ -256,19 +256,34 @@ async function loadPartners(){
     return `${mine.length} jobs total · ${today_count} today · ${delivered.length} delivered`;
   }
 
-  $("cookPartners").innerHTML=c.data?.length?c.data.map(x=>`<div class="partner-row"><span>👨‍🍳</span><div><b>${esc(x.name)}</b><small>${esc(x.type||"Cook")} · ${x.active?"Active":"Inactive"}</small><small>${cookStats(x.id)}</small></div><div class="partner-actions"><button class="pause" onclick="togglePartner('merchants','${x.id}',${!x.active})">${x.active?"Disable":"Enable"}</button><button class="danger" onclick="deletePartner('merchants','${x.id}','${esc(x.name)}')">Delete</button></div></div>`).join(""):"<div class='empty-state'>No approved cooks.</div>";
-  $("riderPartners").innerHTML=r.data?.length?r.data.map(x=>`<div class="partner-row"><span>🛵</span><div><b>${esc(x.name)}</b><small>${esc(x.vehicle_type||"Rider")} · ${esc(x.operating_area||"--")}</small><small>${riderStats(x.id)}</small></div><div class="partner-actions"><button class="pause" onclick="togglePartner('riders','${x.id}',${!x.active})">${x.active?"Disable":"Enable"}</button><button class="danger" onclick="deletePartner('riders','${x.id}','${esc(x.name)}')">Delete</button></div></div>`).join(""):"<div class='empty-state'>No approved riders.</div>";
+  $("cookPartners").innerHTML=c.data?.length?c.data.map(x=>`<div class="partner-row"><span>👨‍🍳</span><div><b>${esc(x.name)}</b><small>${esc(x.type||"Cook")} · ${x.active?"Active":"Inactive"}</small><small>${cookStats(x.id)}</small></div><div class="partner-actions"><button class="pause" onclick="togglePartner('merchants','${x.id}',${!x.active})">${x.active?"Disable":"Enable"}</button><button class="danger" onclick="removePartner('merchants','${x.id}','${esc(x.name)}')">Remove</button></div></div>`).join(""):"<div class='empty-state'>No approved cooks.</div>";
+  $("riderPartners").innerHTML=r.data?.length?r.data.map(x=>`<div class="partner-row"><span>🛵</span><div><b>${esc(x.name)}</b><small>${esc(x.vehicle_type||"Rider")} · ${esc(x.operating_area||"--")}</small><small>${riderStats(x.id)}</small></div><div class="partner-actions"><button class="pause" onclick="togglePartner('riders','${x.id}',${!x.active})">${x.active?"Disable":"Enable"}</button><button class="danger" onclick="removePartner('riders','${x.id}','${esc(x.name)}')">Remove</button></div></div>`).join(""):"<div class='empty-state'>No approved riders.</div>";
 }
 async function togglePartner(table,id,active){
   const {error}=await supabase.from(table).update({active}).eq("id",id);
   if(error)return toast(error.message);
   await refreshAll();toast(active?"Partner enabled":"Partner disabled");
 }
-async function deletePartner(table,id,name){
-  if(!confirm("Permanently delete "+(name||"this partner")+"? This cannot be undone."))return;
-  const {error}=await supabase.from(table).delete().eq("id",id);
-  if(error)return toast(error.message);
-  await refreshAll();toast("Partner deleted");
+async function removePartner(table,id,name){
+  if(!confirm("Remove "+(name||"this partner")+"? They'll be kicked out of Kopi Boy and will need to reapply to come back."))return;
+
+  // Don't hard-delete the merchants/riders row — if they have any order or
+  // menu history, that would violate the database's referential integrity
+  // (that's the popup you saw on the cook). Instead, mark them removed and
+  // deactivate, which keeps historical records intact but excludes them
+  // from every "approved" listing everywhere in the app.
+  const {error:updateError}=await supabase.from(table).update({status:"removed",active:false}).eq("id",id);
+  if(updateError)return toast(updateError.message);
+
+  // Delete their application record entirely so the next time they try to
+  // log in, the app finds nothing on file and sends them to a fresh apply
+  // form — exactly like a brand new applicant, not a "pending review" screen.
+  const appTable=table==="merchants"?"cook_applications":"rider_applications";
+  const linkColumn=table==="merchants"?"merchant_id":"rider_id";
+  const {error:appDeleteError}=await supabase.from(appTable).delete().eq(linkColumn,id);
+  if(appDeleteError){toast(appDeleteError.message);}
+
+  await refreshAll();toast("Partner removed — they'll need to reapply");
 }
 function subscribe(){
   if(adminChannel)supabase.removeChannel(adminChannel);
